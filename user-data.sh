@@ -1,46 +1,125 @@
 #!/bin/bash
 set -euxo pipefail
 
-# Logs
-exec > >(tee /var/log/user-data.log | logger -t user-data) 2>&1
+# --------------------------------------
+# Update all installed packages
+# --------------------------------------
+yum update -y
 
-# needed packages
-dnf update -y
-# Add required dependencies for the Jenkins package
-sudo dnf install -y fontconfig java-21-amazon-corretto dnf-plugins-core
+# --------------------------------------
+# Install basic tools Jenkins may need
+# --------------------------------------
+yum install -y wget git fontconfig yum-utils awscli python3
 
-# jenkins install 
-sudo wget -O /etc/yum.repos.d/jenkins.repo \
-    https://pkg.jenkins.io/rpm-stable/jenkins.repo
-sudo dnf upgrade -y
+# --------------------------------------
+# Add the Jenkins repository
+# --------------------------------------
+wget -O /etc/yum.repos.d/jenkins.repo https://pkg.jenkins.io/rpm-stable/jenkins.repo
 
+# --------------------------------------
+# Import the Jenkins GPG key
+# --------------------------------------
+rpm --import https://pkg.jenkins.io/rpm-stable/jenkins.io-2026.key
 
-sudo dnf install jenkins -y
-sudo systemctl daemon-reload
+# --------------------------------------
+# Upgrade packages
+# --------------------------------------
+yum upgrade -y
 
-# Create Jenkins temp directory on the Jenkins disk
+# --------------------------------------
+# Install Java 21
+# --------------------------------------
+yum install -y java-21-amazon-corretto
+
+# --------------------------------------
+# Make Java 21 the default
+# --------------------------------------
+alternatives --set java /usr/lib/jvm/java-21-amazon-corretto.x86_64/bin/java
+
+# --------------------------------------
+# Verify Java
+# --------------------------------------
+java -version
+
+# --------------------------------------
+# Install Jenkins
+# --------------------------------------
+yum install -y jenkins
+
+# --------------------------------------
+# Install Terraform
+# --------------------------------------
+yum-config-manager --add-repo https://rpm.releases.hashicorp.com/AmazonLinux/hashicorp.repo
+yum install -y terraform
+
+# --------------------------------------
+# Make new Jenkins temp directory
+# --------------------------------------
 mkdir -p /var/lib/jenkins/tmp
 chown jenkins:jenkins /var/lib/jenkins/tmp
 chmod 700 /var/lib/jenkins/tmp
 
-# Tell Jenkins Java to use that temp directory instead of /tmp
+# --------------------------------------
+# Tell Jenkins to use the new temp directory
+# --------------------------------------
 mkdir -p /etc/systemd/system/jenkins.service.d
+
 cat > /etc/systemd/system/jenkins.service.d/override.conf <<'EOF'
 [Service]
 Environment="JAVA_OPTS=-Djava.io.tmpdir=/var/lib/jenkins/tmp"
 EOF
 
-# only if not on EC2
-# # Install AWS CLI v2
-# curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip"
-# unzip awscliv2.zip
-# sudo ./aws/install
+# --------------------------------------
+# Make folders for plugin install
+# --------------------------------------
+mkdir -p /opt
+mkdir -p /var/lib/jenkins/plugins
 
-# Install Terraform from official repo
-sudo dnf config-manager --add-repo https://rpm.releases.hashicorp.com/AmazonLinux/hashicorp.repo
-dnf install -y terraform
+# --------------------------------------
+# Create required plugin list
+# --------------------------------------
+cat > /var/lib/jenkins/plugins.txt <<'EOF'
+aws-credentials
+pipeline-aws
+terraform
+snyk-security-scanner
+pipeline-gcp
+gcp-java-sdk-auth
+github
+github-oauth
+pipeline-github
+EOF
 
-# Start and enable Jenkins
+# --------------------------------------
+# Download Jenkins Plugin Manager
+# --------------------------------------
+wget -O /opt/jenkins-plugin-manager.jar \
+  https://github.com/jenkinsci/plugin-installation-manager-tool/releases/download/2.14.0/jenkins-plugin-manager-2.14.0.jar
+
+# --------------------------------------
+# Install plugins
+# --------------------------------------
+java -jar /opt/jenkins-plugin-manager.jar \
+  --war /usr/share/java/jenkins.war \
+  --plugin-file /var/lib/jenkins/plugins.txt \
+  --plugin-download-directory /var/lib/jenkins/plugins
+
+# --------------------------------------
+# Fix ownership for Jenkins files
+# --------------------------------------
+chown -R jenkins:jenkins /var/lib/jenkins
+
+# --------------------------------------
+# Reload systemd
+# --------------------------------------
 systemctl daemon-reload
+
+# --------------------------------------
+# Enable Jenkins at boot
+# --------------------------------------
 systemctl enable jenkins
-systemctl restart jenkins
+
+# --------------------------------------
+# Start Jenkins
+# --------------------------------------
+systemctl start jenkins
