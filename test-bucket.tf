@@ -51,12 +51,12 @@ resource "aws_s3_object" "webhook_bash_trigger" {
   etag         = filemd5("${path.module}/proof/webhook-bash-trigger.png")
 }
 
-resource "aws_s3_object" "s3_bucket_pics" {
+resource "aws_s3_object" "s3_bucket_pic" {
   bucket       = aws_s3_bucket.wutang.bucket
-  key          = "s3_bucket_pics.png"
-  source       = "${path.module}/proof/s3_bucket_pics.png"
+  key          = "s3_bucket_pic.png"
+  source       = "${path.module}/proof/s3_bucket_pic.png"
   content_type = "image/png"
-  etag         = filemd5("${path.module}/proof/s3_bucket_pics.png")
+  etag         = filemd5("${path.module}/proof/s3_bucket_pic.png")
 }
 
 resource "aws_s3_object" "armageddon_proof" {
