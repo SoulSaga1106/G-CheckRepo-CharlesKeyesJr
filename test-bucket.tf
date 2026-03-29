@@ -61,10 +61,10 @@ resource "aws_s3_object" "s3_bucket_pic" {
 
 resource "aws_s3_object" "armageddon_proof" {
   bucket       = aws_s3_bucket.wutang.bucket
-  key          = "Armageddon-proof.md"
-  source       = "${path.module}/proof/Armageddon-proof.md"
+  key          = "armageddon-proof.md"
+  source       = "${path.module}/proof/armageddon-proof.md"
   content_type = "text/markdown"
-  etag         = filemd5("${path.module}/proof/Armageddon-proof.md")
+  etag         = filemd5("${path.module}/proof/armageddon-proof.md")
 }
 
 resource "aws_s3_bucket_public_access_block" "wutang" {
